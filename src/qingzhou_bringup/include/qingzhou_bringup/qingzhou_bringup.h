@@ -38,6 +38,31 @@ using namespace std;
 using namespace boost::asio;
 using namespace boost;
 
+#pragma pack(push)
+#pragma pack(1)
+typedef union
+{
+  uint8_t raw[33];
+  struct
+  {
+    uint16_t header;
+    uint8_t len;
+    int re_Encoder_Left;
+    int re_Encoder_Right;
+    int Voltage;
+    short accelX;
+    short accelY;
+    short accelZ;
+    short gyroX;
+    short gyroY;
+    short gyroZ;
+    short magX;
+    short magY;
+    short magZ;
+  } data;
+} carInfo;
+#pragma pack(pop)
+
 typedef struct sMartcarControl
 {
   int TargetAngleDir;   //期望转向角度符号 0:直行；0x10:左转；0x20:右转；
@@ -80,13 +105,10 @@ public:
 
   ros::Time current_time, last_time;
 
-  short tempaccelX, tempaccelY, tempaccelZ;       //加速度缓存区
-  short tempgyroX, tempgyroY, tempgyroZ;          //角速度缓存区
-  short tempmagX, tempmagY, tempmagZ;             //磁力计缓存区
-  double accelX, accelY, accelZ;                  //加速度
-  double gyroX, gyroY, gyroZ;                     //角速度
-  double magX, magY, magZ;                        //磁力计
-  int distanceA, distanceB, distanceC, distanceD; //超声波距离值
+  double accelX, accelY, accelZ; //加速度
+  double gyroX, gyroY, gyroZ;    //角速度
+  double magX, magY, magZ;       //磁力计
+
   float imuYaw;
   double roll, pitch, yaw;
   double velDeltaTime;       //时间，存放转换成秒的时间
@@ -105,8 +127,7 @@ public:
 
   //msg
   sMartcarControl moveBaseControl;
-  std_msgs::Float32 currentBattery;  //当前电压
-  std_msgs::Float32 currentAngleMsg; //当前角速度
+  std_msgs::Float32 currentBattery; //当前电压
 
   //订阅话题
   ros::Subscriber sub_imudata;
@@ -119,19 +140,16 @@ public:
   ros::Publisher pub_odom;    //发布odom
   ros::Publisher pub_imu;     //发布imu
   ros::Publisher pub_mag;     //发布磁力计
-  ros::Publisher poly_pub;    //发布顶点
   ros::Publisher pub_battery; //发布电池
 
-  void process_imu(); //发布9250函数
-  void process_odom();
+  void processImu(); //发布9250函数
+  void processOdom();
 
   void recvCarInfoKernel(); //接收下位机发来数据函数
   void sendCarInfoKernel(); //发送小车数据到下位机函数
 
   void callback_imuData(const sensor_msgs::Imu::ConstPtr &msg);       //imu数据回调函数 未使用
   void callback_move_base(const geometry_msgs::Twist::ConstPtr &msg); //move_base回调数据
-
-  void callback_movebase_angle(const std_msgs::Float32::ConstPtr &msg); //move_base回调数据
 };
 
 #endif // NODE_EXAMPLE_TALKER_H

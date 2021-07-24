@@ -1,7 +1,9 @@
 #include "qingzhou_bringup.h"
 
-void actuator::process_odom()
+void actuator::processOdom()
 {
+	ros::Time current_time = ros::Time::now();
+
 	if (encoderLeft > 220 || encoderLeft < -220)
 		encoderLeft = 0;
 	if (encoderRight > 220 || encoderRight < -220)
@@ -86,7 +88,7 @@ void actuator::process_odom()
 	//publish the message
 	pub_odom.publish(odom);
 }
-void actuator::process_imu()
+void actuator::processImu()
 {
 	sensor_msgs::Imu imuMsg;
 	sensor_msgs::MagneticField magMsg;

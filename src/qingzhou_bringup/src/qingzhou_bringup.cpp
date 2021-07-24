@@ -16,6 +16,9 @@ actuator::actuator(ros::NodeHandle handle)
     velDeltaTime = 0;
     calibrate_lineSpeed = 0;
     calibrate_angularSpeed = 0;
+    x = 0.0;
+    y = 0.0;
+    th = 0.0;
 
     memset(&moveBaseControl, 0, sizeof(sMartcarControl));
 
@@ -53,23 +56,16 @@ actuator::actuator(ros::NodeHandle handle)
     }
 
     sub_move_base = handle.subscribe("cmd_vel", 1, &actuator::callback_move_base, this);
-    pub_imu = handle.advertise<sensor_msgs::Imu>("raw", 5);
+    pub_imu = handle.advertise<sensor_msgs::Imu>("uncalibrated", 5);
     pub_mag = handle.advertise<sensor_msgs::MagneticField>("imu/mag", 5);
     pub_odom = handle.advertise<nav_msgs::Odometry>("odom", 5);
-    poly_pub = handle.advertise<geometry_msgs::PolygonStamped>("polygon", 10);
     pub_battery = handle.advertise<std_msgs::Float32>("battery", 10);
-    sub_movebase_angle = handle.subscribe("move_base/currentAngle", 1, &actuator::callback_movebase_angle, this); //订阅move_base/currentAngle话题上的消息。
+    // sub_movebase_angle = handle.subscribe("move_base/currentAngle", 1, &actuator::callback_movebase_angle, this); //订阅move_base/currentAngle话题上的消息。
 }
 
 //析构函数
 actuator::~actuator()
 {
-}
-
-//move_base获得当前角度回调函数
-void actuator::callback_movebase_angle(const std_msgs::Float32::ConstPtr &msg)
-{
-    currentAngleMsg = *msg;
 }
 
 //定义move_base回调函数
@@ -120,9 +116,9 @@ void actuator::run()
     int run_rate = 50;
     ros::Rate rate(run_rate);
 
-    double x = 0.0; //x坐标
-    double y = 0.0; //y坐标
-    double th = 0.0;
+    // double x = 0.0; //x坐标
+    // double y = 0.0; //y坐标
+    // double th = 0.0;
 
     while (ros::ok())
     {
@@ -132,120 +128,12 @@ void actuator::run()
         last_time = ros::Time::now();                      //当前时刻存放为上一时刻
 
         recvCarInfoKernel(); //接收stm32发来的数据
-        process_imu();
 
         currentBattery.data = batteryVoltage; //读取当前电池电压
         pub_battery.publish(currentBattery);  //发布当前电池电压
 
-        process_odom();
-
-#if 1
-        // if (encoderLeft > 220 || encoderLeft < -220)
-        //     encoderLeft = 0;
-        // if (encoderRight > 220 || encoderRight < -220)
-        //     encoderRight = 0;
-        // encoderRight = -encoderRight;
-
-        // detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
-        // detdistance = detEncode / ticksPerMeter;
-        // detth = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
-
-        // linearSpeed = detdistance / velDeltaTime;
-        // angularSpeed = detth / velDeltaTime;
-
-        // if (detdistance != 0)
-        // {
-        //     x += detdistance * cos(th); //x坐标
-        //     y += detdistance * sin(th); //y坐标
-        // }
-        // if (detth != 0)
-        // {
-        //     th += detth; //总角度
-        // }
-
-        // if (calibrate_lineSpeed == 1)
-        // {
-        //     printf("x=%.2f,y=%.2f,th=%.2f,linearSpeed=%.2f,,detEncode=%.2f,LeftticksPerMeter = %lld,rightticksPerMeter = %lld,batteryVoltage = %.2f\n", x, y, th, linearSpeed, detEncode, LeftticksPerMeter, rightticksPerMeter, batteryVoltage);
-        // }
-
-        // //send command to stm32
-        // geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
-
-        // nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
-        // odom.header.stamp = current_time;
-        // odom.header.frame_id = "odom";
-        // odom.child_frame_id = "base_link";
-
-        // //set the position
-        // odom.pose.pose.position.x = x;
-        // odom.pose.pose.position.y = y;
-        // odom.pose.pose.position.z = 0.0;
-        // odom.pose.pose.orientation = odom_quat;
-
-        // odom.twist.twist.linear.x = linearSpeed; //线速度
-        // odom.twist.twist.linear.y = 0;
-        // odom.twist.twist.linear.z = 0;
-        // odom.twist.twist.angular.x = 0;
-        // odom.twist.twist.angular.y = 0;
-        // odom.twist.twist.angular.z = angularSpeed; //角速度
-
-        // if (encoderLeft == 0 && encoderRight == 0)
-        // {
-        //     odom.pose.covariance = {1e-9, 0, 0, 0, 0, 0,
-        //                             0, 1e-3, 1e-9, 0, 0, 0,
-        //                             0, 0, 1e6, 0, 0, 0,
-        //                             0, 0, 0, 1e6, 0, 0,
-        //                             0, 0, 0, 0, 1e6, 0,
-        //                             0, 0, 0, 0, 0, 1e-9};
-        //     odom.twist.covariance = {1e-9, 0, 0, 0, 0, 0,
-        //                              0, 1e-3, 1e-9, 0, 0, 0,
-        //                              0, 0, 1e6, 0, 0, 0,
-        //                              0, 0, 0, 1e6, 0, 0,
-        //                              0, 0, 0, 0, 1e6, 0,
-        //                              0, 0, 0, 0, 0, 1e-9};
-        // }
-        // else
-        // {
-        //     odom.pose.covariance = {1e-3, 0, 0, 0, 0, 0,
-        //                             0, 1e-3, 0, 0, 0, 0,
-        //                             0, 0, 1e6, 0, 0, 0,
-        //                             0, 0, 0, 1e6, 0, 0,
-        //                             0, 0, 0, 0, 1e6, 0,
-        //                             0, 0, 0, 0, 0, 1e3};
-        //     odom.twist.covariance = {1e-3, 0, 0, 0, 0, 0,
-        //                              0, 1e-3, 0, 0, 0, 0,
-        //                              0, 0, 1e6, 0, 0, 0,
-        //                              0, 0, 0, 1e6, 0, 0,
-        //                              0, 0, 0, 0, 1e6, 0,
-        //                              0, 0, 0, 0, 0, 1e3};
-        // }
-
-        // //publish the message
-        // pub_odom.publish(odom);
-
-        /*******************publish polygon message***********************/
-        geometry_msgs::Point32 point[4]; //定义点数组
-        // coordinates described in base_link frame
-        point[0].x = -0.18;
-        point[0].y = -0.12;
-        point[1].x = 0.18;
-        point[1].y = -0.12;
-        point[2].x = 0.18;
-        point[2].y = 0.12;
-        point[3].x = -0.18;
-        point[3].y = 0.12;
-
-        geometry_msgs::PolygonStamped poly;
-        poly.header.stamp = current_time;
-        poly.header.frame_id = "base_link";
-        poly.polygon.points.push_back(point[0]);
-        poly.polygon.points.push_back(point[1]);
-        poly.polygon.points.push_back(point[2]);
-        poly.polygon.points.push_back(point[3]);
-
-        poly_pub.publish(poly);
-
-#endif
+        processImu();
+        processOdom();
         rate.sleep();
     }
 }
@@ -323,47 +211,26 @@ void actuator::recvCarInfoKernel()
     }
 
     if (recvd_flag)
-    {                                        //数据解析，接收到的数据转存
-        memcpy(&encoderLeft, str, 4);        //左轮编码器增量值转存
-        memcpy(&encoderRight, str + 4, 4);   //右轮编码器增量值转存
-        memcpy(&batteryVoltage, str + 8, 4); //电池电压值转存
+    {
+        carInfo carTemp;
+        memcpy(&carTemp.raw[3], str, 30);
+        auto &parsed = carTemp.data;
 
-        memcpy(&tempaccelX, str + 12, 2); //X线加速度转存
-        memcpy(&tempaccelY, str + 14, 2); //Y线加速度转存
-        memcpy(&tempaccelZ, str + 16, 2); //z线加速度转存
+        encoderLeft = parsed.re_Encoder_Left;
+        encoderRight = parsed.re_Encoder_Right;
+        batteryVoltage = parsed.Voltage;
 
-        memcpy(&tempgyroX, str + 18, 2); //X轴角速度转存
-        memcpy(&tempgyroY, str + 20, 2); //Y轴角速度转存
-        memcpy(&tempgyroZ, str + 22, 2); //z轴角速度转存
+        accelX = (float)parsed.accelX / 2048 * 9.8; //线加速度处理
+        accelY = (float)parsed.accelY / 2048 * 9.8;
+        accelZ = (float)parsed.accelZ / 2048 * 9.8;
 
-        memcpy(&tempmagX, str + 24, 2); //X轴磁力计转存
-        memcpy(&tempmagY, str + 26, 2); //Y轴磁力计转存
-        memcpy(&tempmagZ, str + 28, 2); //Z轴磁力计转存
+        gyroX = (float)parsed.gyroX / 16.4 / 57.3; //角速度处理
+        gyroY = (float)parsed.gyroY / 16.4 / 57.3;
+        gyroZ = (float)parsed.gyroZ / 16.4 / 57.3;
 
-        // ROS_INFO("encoderLeft: %d\t", encoderLeft);
-        // ROS_INFO("encoderRight: %d\t", encoderRight);
-        // ROS_INFO("batteryVoltage: %f\t", batteryVoltage);
-        // ROS_INFO("tempaccelX: %d\t", tempaccelX);
-        // ROS_INFO("tempaccelY: %d\t", tempaccelY);
-        // ROS_INFO("tempaccelZ: %d\t", tempaccelZ);
-        // ROS_INFO("tempgyroX: %d\t", tempgyroX);
-        // ROS_INFO("tempgyroY: %d\t", tempgyroY);
-        // ROS_INFO("tempgyroZ: %d\t", tempgyroZ);
-        // ROS_INFO("tempmagX: %d\t", tempmagX);
-        // ROS_INFO("tempmagY: %d\t", tempmagY);
-        // ROS_INFO("tempmagZ: %d\t", tempmagZ);
-
-        accelX = (float)tempaccelX / 2048 * 9.8; //线加速度处理
-        accelY = (float)tempaccelY / 2048 * 9.8;
-        accelZ = (float)tempaccelZ / 2048 * 9.8;
-
-        gyroX = (float)tempgyroX / 16.4 / 57.3; //角速度处理
-        gyroY = (float)tempgyroY / 16.4 / 57.3;
-        gyroZ = (float)tempgyroZ / 16.4 / 57.3;
-
-        magX = (float)tempmagX * 0.14; //磁力计处理
-        magY = (float)tempmagY * 0.14;
-        magZ = (float)tempmagZ * 0.14;
+        magX = (float)parsed.magX * 0.14; //磁力计处理
+        magY = (float)parsed.magY * 0.14;
+        magZ = (float)parsed.magZ * 0.14;
 
         if (encoderLeft > 220 || encoderLeft < -220)
             encoderLeft = 0; //判断编码器脉冲数是否在正确范围
@@ -373,42 +240,3 @@ void actuator::recvCarInfoKernel()
         rightticksPerMeter += encoderRight; //获得右轮总脉冲数
     }
 }
-
-// //发布imu函数
-// void actuator::process_imu()
-// {
-//     sensor_msgs::Imu imuMsg;
-//     sensor_msgs::MagneticField magMsg;
-
-//     ros::Time current_time = ros::Time::now();
-
-//     imuMsg.header.stamp = current_time;
-//     imuMsg.header.frame_id = "imu_link";
-//     imuMsg.angular_velocity.x = gyroX;
-//     imuMsg.angular_velocity.y = gyroY;
-//     imuMsg.angular_velocity.z = gyroZ;
-//     imuMsg.angular_velocity_covariance = {
-//         0.04, 0.0, 0.0,
-//         0.0, 0.04, 0.0,
-//         0.0, 0.0, 0.04};
-
-//     imuMsg.linear_acceleration.x = accelX;
-//     imuMsg.linear_acceleration.y = accelY;
-//     imuMsg.linear_acceleration.z = accelZ;
-//     imuMsg.linear_acceleration_covariance = {
-//         0.04, 0.0, 0.0,
-//         0.0, 0.04, 0.0,
-//         0.0, 0.0, 0.04};
-//     pub_imu.publish(imuMsg); //发布imuMsg
-
-//     magMsg.header.stamp = current_time;
-//     magMsg.header.frame_id = "base_link";
-//     magMsg.magnetic_field.x = magX;
-//     magMsg.magnetic_field.y = magY;
-//     magMsg.magnetic_field.z = magZ;
-//     magMsg.magnetic_field_covariance = {
-//         0.0, 0.0, 0.0,
-//         0.0, 0.0, 0.0,
-//         0.0, 0.0, 0.0};
-//     pub_mag.publish(magMsg); //发布magMsg
-// }
