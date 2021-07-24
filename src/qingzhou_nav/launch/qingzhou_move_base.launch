@@ -2,8 +2,8 @@
 <launch>
   <master auto="start"/>
 
-  <include file="$(find qingzhou_nav)/launch/$(env DZLIDAR).launch" />
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find qingzhou_nav)/maps/test-202010.yaml" output="screen"/>
+  <include file="$(find qingzhou_nav)/launch/ydlidar.launch" />
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find qingzhou_nav)/maps/dom1.yaml" output="screen"/>
 
   <include file="$(find qingzhou_nav)/launch/amcl.launch" />
 

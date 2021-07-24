@@ -138,7 +138,7 @@ void actuator::run()
         last_time = ros::Time::now();                      //当前时刻存放为上一时刻
 
         recvCarInfoKernel(); //接收stm32发来的数据
-        pub_9250();          //发布imu数据
+        process_imu();
 
         currentBattery.data = batteryVoltage; //读取当前电池电压
         pub_battery.publish(currentBattery);  //发布当前电池电压
@@ -148,7 +148,6 @@ void actuator::run()
             encoderLeft = 0;
         if (encoderRight > 220 || encoderRight < -220)
             encoderRight = 0;
-        //encoderLeft = -encoderLeft;
         encoderRight = -encoderRight;
 
         detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
@@ -174,7 +173,6 @@ void actuator::run()
         }
 
         //send command to stm32
-        sendCarInfoKernel();
         geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
 
         nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
@@ -346,18 +344,18 @@ void actuator::recvCarInfoKernel()
         memcpy(&tempmagY, str + 26, 2); //Y轴磁力计转存
         memcpy(&tempmagZ, str + 28, 2); //Z轴磁力计转存
 
-        ROS_INFO("encoderLeft: %d\t", encoderLeft);
-        ROS_INFO("encoderRight: %d\t", encoderRight);
-        ROS_INFO("batteryVoltage: %f\t", batteryVoltage);
-        ROS_INFO("tempaccelX: %d\t", tempaccelX);
-        ROS_INFO("tempaccelY: %d\t", tempaccelY);
-        ROS_INFO("tempaccelZ: %d\t", tempaccelZ);
-        ROS_INFO("tempgyroX: %d\t", tempgyroX);
-        ROS_INFO("tempgyroY: %d\t", tempgyroY);
-        ROS_INFO("tempgyroZ: %d\t", tempgyroZ);
-        ROS_INFO("tempmagX: %d\t", tempmagX);
-        ROS_INFO("tempmagY: %d\t", tempmagY);
-        ROS_INFO("tempmagZ: %d\t", tempmagZ);
+        // ROS_INFO("encoderLeft: %d\t", encoderLeft);
+        // ROS_INFO("encoderRight: %d\t", encoderRight);
+        // ROS_INFO("batteryVoltage: %f\t", batteryVoltage);
+        // ROS_INFO("tempaccelX: %d\t", tempaccelX);
+        // ROS_INFO("tempaccelY: %d\t", tempaccelY);
+        // ROS_INFO("tempaccelZ: %d\t", tempaccelZ);
+        // ROS_INFO("tempgyroX: %d\t", tempgyroX);
+        // ROS_INFO("tempgyroY: %d\t", tempgyroY);
+        // ROS_INFO("tempgyroZ: %d\t", tempgyroZ);
+        // ROS_INFO("tempmagX: %d\t", tempmagX);
+        // ROS_INFO("tempmagY: %d\t", tempmagY);
+        // ROS_INFO("tempmagZ: %d\t", tempmagZ);
 
         accelX = (float)tempaccelX / 2048 * 9.8; //线加速度处理
         accelY = (float)tempaccelY / 2048 * 9.8;
@@ -380,41 +378,41 @@ void actuator::recvCarInfoKernel()
     }
 }
 
-//发布imu函数
-void actuator::pub_9250()
-{
-    sensor_msgs::Imu imuMsg;
-    sensor_msgs::MagneticField magMsg;
+// //发布imu函数
+// void actuator::process_imu()
+// {
+//     sensor_msgs::Imu imuMsg;
+//     sensor_msgs::MagneticField magMsg;
 
-    ros::Time current_time = ros::Time::now();
+//     ros::Time current_time = ros::Time::now();
 
-    imuMsg.header.stamp = current_time;
-    imuMsg.header.frame_id = "imu_link";
-    imuMsg.angular_velocity.x = gyroX;
-    imuMsg.angular_velocity.y = gyroY;
-    imuMsg.angular_velocity.z = gyroZ;
-    imuMsg.angular_velocity_covariance = {
-        0.04, 0.0, 0.0,
-        0.0, 0.04, 0.0,
-        0.0, 0.0, 0.04};
+//     imuMsg.header.stamp = current_time;
+//     imuMsg.header.frame_id = "imu_link";
+//     imuMsg.angular_velocity.x = gyroX;
+//     imuMsg.angular_velocity.y = gyroY;
+//     imuMsg.angular_velocity.z = gyroZ;
+//     imuMsg.angular_velocity_covariance = {
+//         0.04, 0.0, 0.0,
+//         0.0, 0.04, 0.0,
+//         0.0, 0.0, 0.04};
 
-    imuMsg.linear_acceleration.x = accelX;
-    imuMsg.linear_acceleration.y = accelY;
-    imuMsg.linear_acceleration.z = accelZ;
-    imuMsg.linear_acceleration_covariance = {
-        0.04, 0.0, 0.0,
-        0.0, 0.04, 0.0,
-        0.0, 0.0, 0.04};
-    pub_imu.publish(imuMsg); //发布imuMsg
+//     imuMsg.linear_acceleration.x = accelX;
+//     imuMsg.linear_acceleration.y = accelY;
+//     imuMsg.linear_acceleration.z = accelZ;
+//     imuMsg.linear_acceleration_covariance = {
+//         0.04, 0.0, 0.0,
+//         0.0, 0.04, 0.0,
+//         0.0, 0.0, 0.04};
+//     pub_imu.publish(imuMsg); //发布imuMsg
 
-    magMsg.header.stamp = current_time;
-    magMsg.header.frame_id = "base_link";
-    magMsg.magnetic_field.x = magX;
-    magMsg.magnetic_field.y = magY;
-    magMsg.magnetic_field.z = magZ;
-    magMsg.magnetic_field_covariance = {
-        0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0};
-    pub_mag.publish(magMsg); //发布magMsg
-}
+//     magMsg.header.stamp = current_time;
+//     magMsg.header.frame_id = "base_link";
+//     magMsg.magnetic_field.x = magX;
+//     magMsg.magnetic_field.y = magY;
+//     magMsg.magnetic_field.z = magZ;
+//     magMsg.magnetic_field_covariance = {
+//         0.0, 0.0, 0.0,
+//         0.0, 0.0, 0.0,
+//         0.0, 0.0, 0.0};
+//     pub_mag.publish(magMsg); //发布magMsg
+// }
