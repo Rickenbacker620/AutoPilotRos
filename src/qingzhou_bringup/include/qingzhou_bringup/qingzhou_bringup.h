@@ -61,9 +61,7 @@ public:
   int m_baudrate;
   int m_deviceName;
   int m_runningmode; //运行模式
-  int bdebug;
-  int cartype;
-  std::string updatelog;
+
   std::string m_serialport; //对应USB端口
 
   int encoderLeft;            //左编码器
@@ -75,6 +73,12 @@ public:
   float linearSpeed;          //线速度
   float angularSpeed;         //角速度
   float batteryVoltage;       //电池电压
+
+  double x;  //x坐标
+  double y;  //y坐标
+  double th; //角度
+
+  ros::Time current_time, last_time;
 
   short tempaccelX, tempaccelY, tempaccelZ;       //加速度缓存区
   short tempgyroX, tempgyroY, tempgyroZ;          //角速度缓存区
@@ -88,6 +92,12 @@ public:
   double velDeltaTime;       //时间，存放转换成秒的时间
   double detdistance, detth; //计算距离和计算角度角度
   double detEncode;
+
+  long long LeftticksPerMeter = 0;  //左轮编码器每米脉冲数
+  long long rightticksPerMeter = 0; //右轮编码器每米脉冲数
+  long long LeftticksPer2PI = 0;    //左轮每圈编码器脉冲数
+  long long rightticksPer2PI = 0;   //右轮每圈编码器脉冲数
+
   sMartcarControl carParasControl; //根据之前定义的结构体，声明小车控制数据，未使用？
 
   ros::NodeHandle m_handle; //声明ros节点句柄

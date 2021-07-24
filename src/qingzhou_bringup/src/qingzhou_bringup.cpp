@@ -1,10 +1,5 @@
 #include "qingzhou_bringup.h"
 
-long long LeftticksPerMeter = 0;  //左轮编码器每米脉冲数
-long long rightticksPerMeter = 0; //右轮编码器每米脉冲数
-long long LeftticksPer2PI = 0;    //左轮每圈编码器脉冲数
-long long rightticksPer2PI = 0;   //右轮每圈编码器脉冲数
-
 // 构造函数，初始化
 actuator::actuator(ros::NodeHandle handle)
 {
@@ -70,6 +65,7 @@ actuator::actuator(ros::NodeHandle handle)
 actuator::~actuator()
 {
 }
+
 //move_base获得当前角度回调函数
 void actuator::callback_movebase_angle(const std_msgs::Float32::ConstPtr &msg)
 {
@@ -128,8 +124,6 @@ void actuator::run()
     double y = 0.0; //y坐标
     double th = 0.0;
 
-    ros::Time current_time, last_time;
-
     while (ros::ok())
     {
         ros::spinOnce();
@@ -143,89 +137,91 @@ void actuator::run()
         currentBattery.data = batteryVoltage; //读取当前电池电压
         pub_battery.publish(currentBattery);  //发布当前电池电压
 
+        process_odom();
+
 #if 1
-        if (encoderLeft > 220 || encoderLeft < -220)
-            encoderLeft = 0;
-        if (encoderRight > 220 || encoderRight < -220)
-            encoderRight = 0;
-        encoderRight = -encoderRight;
+        // if (encoderLeft > 220 || encoderLeft < -220)
+        //     encoderLeft = 0;
+        // if (encoderRight > 220 || encoderRight < -220)
+        //     encoderRight = 0;
+        // encoderRight = -encoderRight;
 
-        detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
-        detdistance = detEncode / ticksPerMeter;
-        detth = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
+        // detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
+        // detdistance = detEncode / ticksPerMeter;
+        // detth = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
 
-        linearSpeed = detdistance / velDeltaTime;
-        angularSpeed = detth / velDeltaTime;
+        // linearSpeed = detdistance / velDeltaTime;
+        // angularSpeed = detth / velDeltaTime;
 
-        if (detdistance != 0)
-        {
-            x += detdistance * cos(th); //x坐标
-            y += detdistance * sin(th); //y坐标
-        }
-        if (detth != 0)
-        {
-            th += detth; //总角度
-        }
+        // if (detdistance != 0)
+        // {
+        //     x += detdistance * cos(th); //x坐标
+        //     y += detdistance * sin(th); //y坐标
+        // }
+        // if (detth != 0)
+        // {
+        //     th += detth; //总角度
+        // }
 
-        if (calibrate_lineSpeed == 1)
-        {
-            printf("x=%.2f,y=%.2f,th=%.2f,linearSpeed=%.2f,,detEncode=%.2f,LeftticksPerMeter = %lld,rightticksPerMeter = %lld,batteryVoltage = %.2f\n", x, y, th, linearSpeed, detEncode, LeftticksPerMeter, rightticksPerMeter, batteryVoltage);
-        }
+        // if (calibrate_lineSpeed == 1)
+        // {
+        //     printf("x=%.2f,y=%.2f,th=%.2f,linearSpeed=%.2f,,detEncode=%.2f,LeftticksPerMeter = %lld,rightticksPerMeter = %lld,batteryVoltage = %.2f\n", x, y, th, linearSpeed, detEncode, LeftticksPerMeter, rightticksPerMeter, batteryVoltage);
+        // }
 
-        //send command to stm32
-        geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+        // //send command to stm32
+        // geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
 
-        nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
-        odom.header.stamp = current_time;
-        odom.header.frame_id = "odom";
-        odom.child_frame_id = "base_link";
+        // nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
+        // odom.header.stamp = current_time;
+        // odom.header.frame_id = "odom";
+        // odom.child_frame_id = "base_link";
 
-        //set the position
-        odom.pose.pose.position.x = x;
-        odom.pose.pose.position.y = y;
-        odom.pose.pose.position.z = 0.0;
-        odom.pose.pose.orientation = odom_quat;
+        // //set the position
+        // odom.pose.pose.position.x = x;
+        // odom.pose.pose.position.y = y;
+        // odom.pose.pose.position.z = 0.0;
+        // odom.pose.pose.orientation = odom_quat;
 
-        odom.twist.twist.linear.x = linearSpeed; //线速度
-        odom.twist.twist.linear.y = 0;
-        odom.twist.twist.linear.z = 0;
-        odom.twist.twist.angular.x = 0;
-        odom.twist.twist.angular.y = 0;
-        odom.twist.twist.angular.z = angularSpeed; //角速度
+        // odom.twist.twist.linear.x = linearSpeed; //线速度
+        // odom.twist.twist.linear.y = 0;
+        // odom.twist.twist.linear.z = 0;
+        // odom.twist.twist.angular.x = 0;
+        // odom.twist.twist.angular.y = 0;
+        // odom.twist.twist.angular.z = angularSpeed; //角速度
 
-        if (encoderLeft == 0 && encoderRight == 0)
-        {
-            odom.pose.covariance = {1e-9, 0, 0, 0, 0, 0,
-                                    0, 1e-3, 1e-9, 0, 0, 0,
-                                    0, 0, 1e6, 0, 0, 0,
-                                    0, 0, 0, 1e6, 0, 0,
-                                    0, 0, 0, 0, 1e6, 0,
-                                    0, 0, 0, 0, 0, 1e-9};
-            odom.twist.covariance = {1e-9, 0, 0, 0, 0, 0,
-                                     0, 1e-3, 1e-9, 0, 0, 0,
-                                     0, 0, 1e6, 0, 0, 0,
-                                     0, 0, 0, 1e6, 0, 0,
-                                     0, 0, 0, 0, 1e6, 0,
-                                     0, 0, 0, 0, 0, 1e-9};
-        }
-        else
-        {
-            odom.pose.covariance = {1e-3, 0, 0, 0, 0, 0,
-                                    0, 1e-3, 0, 0, 0, 0,
-                                    0, 0, 1e6, 0, 0, 0,
-                                    0, 0, 0, 1e6, 0, 0,
-                                    0, 0, 0, 0, 1e6, 0,
-                                    0, 0, 0, 0, 0, 1e3};
-            odom.twist.covariance = {1e-3, 0, 0, 0, 0, 0,
-                                     0, 1e-3, 0, 0, 0, 0,
-                                     0, 0, 1e6, 0, 0, 0,
-                                     0, 0, 0, 1e6, 0, 0,
-                                     0, 0, 0, 0, 1e6, 0,
-                                     0, 0, 0, 0, 0, 1e3};
-        }
+        // if (encoderLeft == 0 && encoderRight == 0)
+        // {
+        //     odom.pose.covariance = {1e-9, 0, 0, 0, 0, 0,
+        //                             0, 1e-3, 1e-9, 0, 0, 0,
+        //                             0, 0, 1e6, 0, 0, 0,
+        //                             0, 0, 0, 1e6, 0, 0,
+        //                             0, 0, 0, 0, 1e6, 0,
+        //                             0, 0, 0, 0, 0, 1e-9};
+        //     odom.twist.covariance = {1e-9, 0, 0, 0, 0, 0,
+        //                              0, 1e-3, 1e-9, 0, 0, 0,
+        //                              0, 0, 1e6, 0, 0, 0,
+        //                              0, 0, 0, 1e6, 0, 0,
+        //                              0, 0, 0, 0, 1e6, 0,
+        //                              0, 0, 0, 0, 0, 1e-9};
+        // }
+        // else
+        // {
+        //     odom.pose.covariance = {1e-3, 0, 0, 0, 0, 0,
+        //                             0, 1e-3, 0, 0, 0, 0,
+        //                             0, 0, 1e6, 0, 0, 0,
+        //                             0, 0, 0, 1e6, 0, 0,
+        //                             0, 0, 0, 0, 1e6, 0,
+        //                             0, 0, 0, 0, 0, 1e3};
+        //     odom.twist.covariance = {1e-3, 0, 0, 0, 0, 0,
+        //                              0, 1e-3, 0, 0, 0, 0,
+        //                              0, 0, 1e6, 0, 0, 0,
+        //                              0, 0, 0, 1e6, 0, 0,
+        //                              0, 0, 0, 0, 1e6, 0,
+        //                              0, 0, 0, 0, 0, 1e3};
+        // }
 
-        //publish the message
-        pub_odom.publish(odom);
+        // //publish the message
+        // pub_odom.publish(odom);
 
         /*******************publish polygon message***********************/
         geometry_msgs::Point32 point[4]; //定义点数组

@@ -1,5 +1,91 @@
 #include "qingzhou_bringup.h"
 
+void actuator::process_odom()
+{
+	if (encoderLeft > 220 || encoderLeft < -220)
+		encoderLeft = 0;
+	if (encoderRight > 220 || encoderRight < -220)
+		encoderRight = 0;
+
+	encoderRight = -encoderRight;
+
+	detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
+	detdistance = detEncode / ticksPerMeter;
+	detth = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
+
+	linearSpeed = detdistance / velDeltaTime;
+	angularSpeed = detth / velDeltaTime;
+
+	if (detdistance != 0)
+	{
+		x += detdistance * cos(th); //x坐标
+		y += detdistance * sin(th); //y坐标
+	}
+	if (detth != 0)
+	{
+		th += detth; //总角度
+	}
+
+	if (calibrate_lineSpeed == 1)
+	{
+		printf("x=%.2f,y=%.2f,th=%.2f,linearSpeed=%.2f,,detEncode=%.2f,LeftticksPerMeter = %lld,rightticksPerMeter = %lld,batteryVoltage = %.2f\n", x, y, th, linearSpeed, detEncode, LeftticksPerMeter, rightticksPerMeter, batteryVoltage);
+	}
+
+	//send command to stm32
+	geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+
+	nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
+	odom.header.stamp = current_time;
+	odom.header.frame_id = "odom";
+	odom.child_frame_id = "base_link";
+
+	//set the position
+	odom.pose.pose.position.x = x;
+	odom.pose.pose.position.y = y;
+	odom.pose.pose.position.z = 0.0;
+	odom.pose.pose.orientation = odom_quat;
+
+	odom.twist.twist.linear.x = linearSpeed; //线速度
+	odom.twist.twist.linear.y = 0;
+	odom.twist.twist.linear.z = 0;
+	odom.twist.twist.angular.x = 0;
+	odom.twist.twist.angular.y = 0;
+	odom.twist.twist.angular.z = angularSpeed; //角速度
+
+	if (encoderLeft == 0 && encoderRight == 0)
+	{
+		odom.pose.covariance = {1e-9, 0, 0, 0, 0, 0,
+								0, 1e-3, 1e-9, 0, 0, 0,
+								0, 0, 1e6, 0, 0, 0,
+								0, 0, 0, 1e6, 0, 0,
+								0, 0, 0, 0, 1e6, 0,
+								0, 0, 0, 0, 0, 1e-9};
+		odom.twist.covariance = {1e-9, 0, 0, 0, 0, 0,
+								 0, 1e-3, 1e-9, 0, 0, 0,
+								 0, 0, 1e6, 0, 0, 0,
+								 0, 0, 0, 1e6, 0, 0,
+								 0, 0, 0, 0, 1e6, 0,
+								 0, 0, 0, 0, 0, 1e-9};
+	}
+	else
+	{
+		odom.pose.covariance = {1e-3, 0, 0, 0, 0, 0,
+								0, 1e-3, 0, 0, 0, 0,
+								0, 0, 1e6, 0, 0, 0,
+								0, 0, 0, 1e6, 0, 0,
+								0, 0, 0, 0, 1e6, 0,
+								0, 0, 0, 0, 0, 1e3};
+		odom.twist.covariance = {1e-3, 0, 0, 0, 0, 0,
+								 0, 1e-3, 0, 0, 0, 0,
+								 0, 0, 1e6, 0, 0, 0,
+								 0, 0, 0, 1e6, 0, 0,
+								 0, 0, 0, 0, 1e6, 0,
+								 0, 0, 0, 0, 0, 1e3};
+	}
+
+	//publish the message
+	pub_odom.publish(odom);
+}
 void actuator::process_imu()
 {
 	sensor_msgs::Imu imuMsg;
