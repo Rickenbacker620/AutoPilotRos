@@ -22,6 +22,7 @@
   <exec_depend>robot_pose_ekf</exec_depend>
   <exec_depend>navigation</exec_depend>
   <exec_depend>serial</exec_depend>
+  <exec_depend>gmapping</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
