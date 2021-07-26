@@ -63,7 +63,7 @@ typedef union
 } carInfo;
 #pragma pack(pop)
 
-typedef struct sMartcarControl
+typedef struct
 {
   int TargetAngleDir;   //期望转向角度符号 0:直行；0x10:左转；0x20:右转；
   int TargetAngle;      //期望角度
@@ -71,14 +71,13 @@ typedef struct sMartcarControl
   int TargetModeSelect; //模式选择
   int TargetShiftPosition;
   bool control;
-} sMartcarControl;
+} SmartcarControl;
 
-class actuator
+class Actuator
 {
 public:
-  //! Constructor.
-  actuator(ros::NodeHandle nh);
-  ~actuator();
+  Actuator();
+  ~Actuator();
 
   void run();
 
@@ -89,30 +88,30 @@ public:
 
   std::string m_serialport; //对应USB端口
 
-  int encoderLeft;            //左编码器
-  int encoderRight;           //右编码器
-  int calibrate_lineSpeed;    //标定线速度
-  int calibrate_angularSpeed; //标定角速度
-  float ticksPerMeter;        //一米脉冲数
-  float ticksPer2PI;          //每圈脉冲数
-  float linearSpeed;          //线速度
-  float angularSpeed;         //角速度
-  float batteryVoltage;       //电池电压
+  int encoderLeft;         //左编码器
+  int encoderRight;        //右编码器
+  int calibrate_lineSpeed; //标定线速度
+
+  float ticksPerMeter;  //一米脉冲数
+  float ticksPer2PI;    //每圈脉冲数
+  float linearSpeed;    //线速度
+  float angularSpeed;   //角速度
+  float batteryVoltage; //电池电压
 
   double x;  //x坐标
   double y;  //y坐标
   double th; //角度
 
-  ros::Time current_time, last_time;
+  ros::Time current_time_;
+  ros::Time last_time_;
+  double delta_time_;
 
   double accelX, accelY, accelZ; //加速度
   double gyroX, gyroY, gyroZ;    //角速度
   double magX, magY, magZ;       //磁力计
 
-  float imuYaw;
-  double roll, pitch, yaw;
-  double velDeltaTime;       //时间，存放转换成秒的时间
-  double detdistance, detth; //计算距离和计算角度角度
+  double detDistance;
+  double detTh; //计算距离和计算角度角度
   double detEncode;
 
   long long LeftticksPerMeter = 0;  //左轮编码器每米脉冲数
@@ -120,20 +119,17 @@ public:
   long long LeftticksPer2PI = 0;    //左轮每圈编码器脉冲数
   long long rightticksPer2PI = 0;   //右轮每圈编码器脉冲数
 
-  sMartcarControl carParasControl; //根据之前定义的结构体，声明小车控制数据，未使用？
+  SmartcarControl carParasControl; //根据之前定义的结构体，声明小车控制数据，未使用？
 
-  ros::NodeHandle m_handle; //声明ros节点句柄
-  serial::Serial ser;       //声明串口ser
+  serial::Serial ser; //声明串口ser
 
   //msg
-  sMartcarControl moveBaseControl;
+  SmartcarControl moveBaseControl;
   std_msgs::Float32 currentBattery; //当前电压
 
   //订阅话题
   ros::Subscriber sub_imudata;
-  ros::Subscriber sub_move_base;      //订阅move_base
-  ros::Subscriber sub_movebase_angle; //订阅movebase角度
-  ros::Subscriber sub_roadlinePoints; //订阅线速度
+  ros::Subscriber sub_move_base; //订阅move_base
 
   //发布话题
   ros::Publisher pub_actuator;
@@ -142,6 +138,7 @@ public:
   ros::Publisher pub_mag;     //发布磁力计
   ros::Publisher pub_battery; //发布电池
 
+  void processBattery();
   void processImu(); //发布9250函数
   void processOdom();
 

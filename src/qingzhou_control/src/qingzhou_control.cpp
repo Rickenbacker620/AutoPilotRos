@@ -1,7 +1,7 @@
-#include "qingzhou_bringup.h"
+#include "qingzhou_control.h"
 
 // 构造函数，初始化
-actuator::actuator(ros::NodeHandle handle)
+Actuator::Actuator()
 {
     m_baudrate = 115200;
     m_serialport = "/dev/ttyUSB0";
@@ -12,22 +12,22 @@ actuator::actuator(ros::NodeHandle handle)
     ticksPer2PI = 0;    //每圈脉冲数
     encoderLeft = 0;    //左编码器
     encoderRight = 0;   //有编码器
-    imuYaw = 0;
-    velDeltaTime = 0;
+    delta_time_ = 0;
     calibrate_lineSpeed = 0;
-    calibrate_angularSpeed = 0;
     x = 0.0;
     y = 0.0;
     th = 0.0;
+    ros::NodeHandle nh;
+    ros::NodeHandle private_nh("~");
 
-    memset(&moveBaseControl, 0, sizeof(sMartcarControl));
+    memset(&moveBaseControl, 0, sizeof(SmartcarControl));
+    moveBaseControl.TargetAngle = 60;
 
-    handle.param("mcubaudrate", m_baudrate, m_baudrate);                                    //波特率
-    handle.param("mcuserialport", m_serialport, std::string("/dev/ttyUSB0"));               //定义传输的串口
-    handle.param("calibrate_lineSpeed", calibrate_lineSpeed, calibrate_lineSpeed);          //标定线速度
-    handle.param("calibrate_angularSpeed", calibrate_angularSpeed, calibrate_angularSpeed); //标定角速度
-    handle.param("ticksPerMeter", ticksPerMeter, ticksPerMeter);                            //一米脉冲数
-    handle.param("ticksPer2PI", ticksPer2PI, ticksPer2PI);                                  //每圈脉冲数
+    private_nh.param("mcubaudrate", m_baudrate, m_baudrate);                           //波特率
+    private_nh.param("mcuserialport", m_serialport, std::string("/dev/ttyUSB0"));      //定义传输的串口
+    private_nh.param("calibrate_lineSpeed", calibrate_lineSpeed, calibrate_lineSpeed); //标定线速度
+    private_nh.param("ticksPerMeter", ticksPerMeter, ticksPerMeter);                   //一米脉冲数
+    private_nh.param("ticksPer2PI", ticksPer2PI, ticksPer2PI);                         //每圈脉冲数
 
     try
     { //异常处理
@@ -55,23 +55,23 @@ actuator::actuator(ros::NodeHandle handle)
                   << "Serial port failed!" << std::endl;
     }
 
-    sub_move_base = handle.subscribe("cmd_vel", 1, &actuator::callback_move_base, this);
-    pub_imu = handle.advertise<sensor_msgs::Imu>("uncalibrated", 5);
-    pub_mag = handle.advertise<sensor_msgs::MagneticField>("imu/mag", 5);
-    pub_odom = handle.advertise<nav_msgs::Odometry>("odom", 5);
-    pub_battery = handle.advertise<std_msgs::Float32>("battery", 10);
+    sub_move_base = nh.subscribe("cmd_vel", 1, &Actuator::callback_move_base, this);
+    pub_imu = nh.advertise<sensor_msgs::Imu>("uncalibrated", 5);
+    pub_mag = nh.advertise<sensor_msgs::MagneticField>("imu/mag", 5);
+    pub_odom = nh.advertise<nav_msgs::Odometry>("odom", 5);
+    pub_battery = nh.advertise<std_msgs::Float32>("battery", 10);
     // sub_movebase_angle = handle.subscribe("move_base/currentAngle", 1, &actuator::callback_movebase_angle, this); //订阅move_base/currentAngle话题上的消息。
 }
 
 //析构函数
-actuator::~actuator()
+Actuator::~Actuator()
 {
 }
 
 //定义move_base回调函数
-void actuator::callback_move_base(const geometry_msgs::Twist::ConstPtr &msg) //对应cmd_vel话题，对应geometry_msgs/Twist消息
+void Actuator::callback_move_base(const geometry_msgs::Twist::ConstPtr &msg) //对应cmd_vel话题，对应geometry_msgs/Twist消息
 {
-    memset(&moveBaseControl, 0, sizeof(sMartcarControl)); //清零movebase数据存储区
+    memset(&moveBaseControl, 0, sizeof(SmartcarControl)); //清零movebase数据存储区
 
     float v = msg->linear.x;  //move_base算得的线速度
     float w = msg->angular.z; //move_base算得的角速度
@@ -107,39 +107,35 @@ void actuator::callback_move_base(const geometry_msgs::Twist::ConstPtr &msg) //�
         moveBaseControl.TargetAngleDir = 0x10; //左转
     else if (moveBaseControl.TargetAngle == 0)
         moveBaseControl.TargetAngleDir = 0x00; //直行
-
-    //   sendCarInfoKernel();
 }
 
-void actuator::run()
+void Actuator::run()
 {
     int run_rate = 50;
     ros::Rate rate(run_rate);
 
-    // double x = 0.0; //x坐标
-    // double y = 0.0; //y坐标
-    // double th = 0.0;
-
     while (ros::ok())
     {
         ros::spinOnce();
-        current_time = ros::Time::now();                   //获得当前时间
-        velDeltaTime = (current_time - last_time).toSec(); //转换成秒
-        last_time = ros::Time::now();                      //当前时刻存放为上一时刻
+
+        current_time_ = ros::Time::now();
+        delta_time_ = (current_time_ - last_time_).toSec(); //转换成秒
+        last_time_ = ros::Time::now();
 
         recvCarInfoKernel(); //接收stm32发来的数据
 
-        currentBattery.data = batteryVoltage; //读取当前电池电压
-        pub_battery.publish(currentBattery);  //发布当前电池电压
-
+        processBattery();
         processImu();
         processOdom();
+
+        sendCarInfoKernel();
+
         rate.sleep();
     }
 }
 
 //发送小车数据到下位机
-void actuator::sendCarInfoKernel()
+void Actuator::sendCarInfoKernel()
 {
     unsigned char buf[23] = {0};
     buf[0] = 0xa5;
@@ -151,6 +147,7 @@ void actuator::sendCarInfoKernel()
     buf[5] = (int)abs(moveBaseControl.TargetSpeed);    //targetSpeed期望线速度
     buf[6] = (int)moveBaseControl.TargetModeSelect;    //0-->person control,1-->auto control期望模式 人工/自动
     buf[7] = (int)moveBaseControl.TargetShiftPosition; //targetshiftposition  0-->P stop;1-->R;2-->D.期望档位 停止/倒车/前进
+    ROS_INFO("%d", moveBaseControl.TargetAngle);
 
     buf[8] = 0;
     unsigned char sum = 0;
@@ -161,7 +158,7 @@ void actuator::sendCarInfoKernel()
 }
 
 //接收下位机发送来的数据
-void actuator::recvCarInfoKernel()
+void Actuator::recvCarInfoKernel()
 {
     std::string recvstr;
     unsigned char tempdata, lenrecv;

@@ -1,9 +1,13 @@
-#include "qingzhou_bringup.h"
+#include "qingzhou_control.h"
 
-void actuator::processOdom()
+void Actuator::processBattery()
 {
-	ros::Time current_time = ros::Time::now();
+	currentBattery.data = batteryVoltage;
+	pub_battery.publish(currentBattery);
+}
 
+void Actuator::processOdom()
+{
 	if (encoderLeft > 220 || encoderLeft < -220)
 		encoderLeft = 0;
 	if (encoderRight > 220 || encoderRight < -220)
@@ -12,20 +16,20 @@ void actuator::processOdom()
 	encoderRight = -encoderRight;
 
 	detEncode = (encoderLeft + encoderRight) / 2; //求编码器平均值
-	detdistance = detEncode / ticksPerMeter;
-	detth = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
+	detDistance = detEncode / ticksPerMeter;
+	detTh = (encoderRight - encoderLeft) * 2 * PI / ticksPer2PI; //计算当前角度 通过标定获得ticksPer2PI
 
-	linearSpeed = detdistance / velDeltaTime;
-	angularSpeed = detth / velDeltaTime;
+	linearSpeed = detDistance / delta_time_;
+	angularSpeed = detTh / delta_time_;
 
-	if (detdistance != 0)
+	if (detDistance != 0)
 	{
-		x += detdistance * cos(th); //x坐标
-		y += detdistance * sin(th); //y坐标
+		x += detDistance * cos(th); //x坐标
+		y += detDistance * sin(th); //y坐标
 	}
-	if (detth != 0)
+	if (detTh != 0)
 	{
-		th += detth; //总角度
+		th += detTh; //总角度
 	}
 
 	if (calibrate_lineSpeed == 1)
@@ -33,11 +37,10 @@ void actuator::processOdom()
 		printf("x=%.2f,y=%.2f,th=%.2f,linearSpeed=%.2f,,detEncode=%.2f,LeftticksPerMeter = %lld,rightticksPerMeter = %lld,batteryVoltage = %.2f\n", x, y, th, linearSpeed, detEncode, LeftticksPerMeter, rightticksPerMeter, batteryVoltage);
 	}
 
-	//send command to stm32
 	geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
 
 	nav_msgs::Odometry odom; //创建nav_msgs::Odometry类型的消息odom
-	odom.header.stamp = current_time;
+	odom.header.stamp = current_time_;
 	odom.header.frame_id = "odom";
 	odom.child_frame_id = "base_link";
 
@@ -84,18 +87,15 @@ void actuator::processOdom()
 								 0, 0, 0, 0, 1e6, 0,
 								 0, 0, 0, 0, 0, 1e3};
 	}
-
 	//publish the message
 	pub_odom.publish(odom);
 }
-void actuator::processImu()
+
+void Actuator::processImu()
 {
 	sensor_msgs::Imu imuMsg;
-	sensor_msgs::MagneticField magMsg;
 
-	ros::Time current_time = ros::Time::now();
-
-	imuMsg.header.stamp = current_time;
+	imuMsg.header.stamp = current_time_;
 	imuMsg.header.frame_id = "imu_link";
 	imuMsg.angular_velocity.x = gyroX;
 	imuMsg.angular_velocity.y = gyroY;
@@ -108,20 +108,21 @@ void actuator::processImu()
 	imuMsg.linear_acceleration.x = accelX;
 	imuMsg.linear_acceleration.y = accelY;
 	imuMsg.linear_acceleration.z = accelZ;
-	imuMsg.linear_acceleration_covariance = {
-		0.04, 0.0, 0.0,
-		0.0, 0.04, 0.0,
-		0.0, 0.0, 0.04};
-	pub_imu.publish(imuMsg); //发布imuMsg
+	imuMsg.linear_acceleration_covariance =
+		{0.04, 0.0, 0.0,
+		 0.0, 0.04, 0.0,
+		 0.0, 0.0, 0.04};
+	pub_imu.publish(imuMsg);
 
-	magMsg.header.stamp = current_time;
-	magMsg.header.frame_id = "base_link";
+	sensor_msgs::MagneticField magMsg;
+	magMsg.header.stamp = current_time_;
+	magMsg.header.frame_id = "imu_link";
 	magMsg.magnetic_field.x = magX;
 	magMsg.magnetic_field.y = magY;
 	magMsg.magnetic_field.z = magZ;
-	magMsg.magnetic_field_covariance = {
-		0.0, 0.0, 0.0,
-		0.0, 0.0, 0.0,
-		0.0, 0.0, 0.0};
-	pub_mag.publish(magMsg); //发布magMsg
+	magMsg.magnetic_field_covariance =
+		{0.0, 0.0, 0.0,
+		 0.0, 0.0, 0.0,
+		 0.0, 0.0, 0.0};
+	pub_mag.publish(magMsg);
 }
