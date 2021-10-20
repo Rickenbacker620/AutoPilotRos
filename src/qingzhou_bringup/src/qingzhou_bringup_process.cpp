@@ -86,6 +86,7 @@ void actuator::process_odom()
 	//publish the message
 	pub_odom.publish(odom);
 }
+
 void actuator::process_imu()
 {
 	sensor_msgs::Imu imuMsg;
